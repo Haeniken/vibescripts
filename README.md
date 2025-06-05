@@ -140,7 +140,7 @@ RABBITMQ_MANAGEMENT_PORT=15672
 
 Путь к файлу `.env` указан в скрипте:
 ```bash
-ENV_FILE="/pool_4x8TB/containers/queue/.env"
+ENV_FILE="/opt/containers/queue/.env"
 ```
 
 Если путь отличается, обновите его в скрипте.
