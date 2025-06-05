@@ -119,7 +119,7 @@ Container <code>php-apache-clients</code> is dead
 2. Добавьте права на выполнение:
    ```bash
    chmod +x /opt/scripts/queue/consumer_restarter.sh
-   chmod +x /opt/scripts/queue/monitor_and_alert.sh
+   chmod +x /opt/scripts/queue/check_rabbitmq_consumers.sh
    ```
 
 3. Убедитесь, что установлены необходимые зависимости (см. раздел [Зависимости](#зависимости)).
@@ -157,7 +157,7 @@ QUEUES=(
 
 ### 3. Настройка Telegram-уведомлений
 
-Для работы `monitor_and_alert.sh` требуется скрипт `telegram-alert.sh`. Убедитесь, что он настроен и доступен по пути `/opt/scripts/telegram-alert.sh`.
+Для работы `check_rabbitmq_consumers.sh` требуется скрипт `telegram-alert.sh`. Убедитесь, что он настроен и доступен по пути `/opt/scripts/telegram-alert.sh`.
 
 Также настройте переменные окружения для Telegram:
 ```bash
