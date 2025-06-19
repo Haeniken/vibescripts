@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -euo pipefail
 
 # Configuration
@@ -25,7 +24,7 @@ validate_domain() {
     local domain="${1%%[[:space:]]*}"
     [[ "$domain" =~ ^# ]] || [[ -z "$domain" ]] && return 1
 
-    # More comprehensive domain validation
+    # Domain validation regex (allows standard domains and IDN/Punycode)
     if [[ ! "$domain" =~ ^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\.)+([A-Za-z]{2,}|xn--[A-Za-z0-9]+)$ ]]; then
         echo "Warning: Invalid domain format: $domain" >&2
         return 1
@@ -33,45 +32,38 @@ validate_domain() {
     return 0
 }
 
-# Backup
 create_backup() {
     local timestamp=$(date +%Y%m%d%H%M%S)
     local backup_file="$BACKUP_DIR/${CONF_FILE}.${timestamp}.bak"
 
-    # Создаем директорию для бэкапов если ее нет
-    mkdir -p "$BACKUP_DIR" || {
-        echo "Error: Cannot create backup directory $BACKUP_DIR" >&2
-        return 1
-    }
-
-    # Проверяем доступ на запись в директорию бэкапов
-    if [ ! -w "$BACKUP_DIR" ]; then
-        echo "Error: No write permissions for backup directory $BACKUP_DIR" >&2
-        return 1
-    fi
-
-    # Создаем бэкап если файл конфига существует
+    # Only create backup if config file exists
     if [ -f "$CONFIG_DIR/$CONF_FILE" ]; then
         if cp "$CONFIG_DIR/$CONF_FILE" "$backup_file"; then
-            echo "Created backup: $backup_file"
+            echo "Backup successfully created:"
+            echo "  Location:    $backup_file"
+            echo "  Backup time: $(date)"
+            echo "  Original:    $CONFIG_DIR/$CONF_FILE"
             return 0
         else
             echo "Error: Failed to create backup" >&2
             return 1
         fi
+    else
+        echo "Notice: No existing config file found to backup ($CONFIG_DIR/$CONF_FILE)"
+        return 0
     fi
-    return 0
 }
 
 generate_config() {
     echo "$(date) - Starting configuration generation"
 
-    # Generate backup
+    # Create backup with verbose output
+    echo "Creating backup of current configuration..."
     if ! create_backup; then
         echo "Warning: Continuing without backup" >&2
     fi
 
-    # Generate new config
+    # Generate new config file
     cat > "$CONFIG_DIR/$CONF_FILE" <<EOF
 # Auto-generated Traefik configuration
 # Generated at: $(date)
@@ -81,17 +73,21 @@ http:
   routers:
 EOF
 
+    # Process each line in CSV file
     while IFS=',' read -ra domains || [[ -n "${domains[*]}" ]]; do
+        # Skip empty lines and comments
         [[ ${#domains[@]} -eq 0 ]] && continue
         [[ "${domains[0]}" =~ ^# ]] && continue
 
         local router_name="${domains[0]%%[[:space:]]*}"
         local domain_rule="" valid_domains=()
 
+        # Validate and collect domains
         for domain in "${domains[@]}"; do
             domain="${domain%%[[:space:]]*}"
             validate_domain "$domain" || continue
 
+            # Check for duplicate domains
             if [[ -v existing_domains["$domain"] ]]; then
                 echo "Warning: Duplicate domain '$domain' in $router_name" >&2
                 continue 2
@@ -103,6 +99,7 @@ EOF
 
         [[ ${#valid_domains[@]} -eq 0 ]] && continue
 
+        # Build domain rule string
         for ((i = 0; i < ${#valid_domains[@]}; i++)); do
             [[ $i -gt 0 ]] && domain_rule+=", "
             domain_rule+="\"${valid_domains[$i]}\""
@@ -110,6 +107,7 @@ EOF
 
         echo "Processing: $router_name (domains: ${valid_domains[*]})"
 
+        # Append router configuration
         cat >> "$CONFIG_DIR/$CONF_FILE" <<EOF
     $router_name:
       entryPoints:
@@ -127,9 +125,8 @@ EOF
     echo "Total domains processed: ${#existing_domains[@]}"
 }
 
-# Main
 main() {
-    # Check arguments
+    # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -h|--help) show_help; exit 0 ;;
@@ -138,7 +135,7 @@ main() {
         esac
     done
 
-    # Check dependencies
+    # Check required commands are available
     local deps=("bash" "mkdir" "touch" "cp" "date")
     for dep in "${deps[@]}"; do
         if ! command -v "$dep" >/dev/null; then
@@ -147,20 +144,32 @@ main() {
         fi
     done
 
-    # Validate environment
+    # Validate environment and setup directories
     [[ -f "$DOMAINS_CSV" ]] || { echo "Error: Missing $DOMAINS_CSV" >&2; exit 1; }
-    mkdir -p "$CONFIG_DIR" || { echo "Error: Cannot create $CONFIG_DIR" >&2; exit 1; }
-    [ -w "$CONFIG_DIR" ] || { echo "Error: No write permissions for $CONFIG_DIR" >&2; exit 1; }
+    mkdir -p "$CONFIG_DIR" "$BACKUP_DIR" || { 
+        echo "Error: Cannot create required directories" >&2
+        exit 1
+    }
+    [ -w "$CONFIG_DIR" ] && [ -w "$BACKUP_DIR" ] || {
+        echo "Error: Missing write permissions for config or backup directories" >&2
+        exit 1
+    }
 
-    # Create lock file
+    # Prevent concurrent execution using file lock
     exec 9>"$LOCK_FILE"
-    flock -n 9 || { echo "Error: Script is already running"; exit 1; }
+    if ! flock -n 9; then
+        echo "Error: Script is already running (PID $(cat "$LOCK_FILE" 2>/dev/null))" >&2
+        exit 1
+    fi
+    echo $$ > "$LOCK_FILE"
 
+    # Generate configuration
     generate_config
 
-    # Cleanup
+    # Cleanup lock file
     flock -u 9
     exec 9>&-
+    rm -f "$LOCK_FILE"
 }
 
 main "$@"
