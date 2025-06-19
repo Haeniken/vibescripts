@@ -14,7 +14,7 @@ declare -A existing_domains
 # Functions
 show_help() {
     echo "Usage: $0 [options]"
-    echo "Generate Traefik configuration from CSV by github.com/haeniken"
+    echo "Generate Traefik configuration from CSV by github.com/haeniken. Tested on traefik:v3.3.3"
     echo "Options:"
     echo "  -v, --version  Show version"
     echo "  -h, --help     Show this help"
