@@ -1,3 +1,7 @@
+# CSV format: primary_domain,additional_domain1,additional_domain2,...
+# Example: example.com,www.example.com,test.example.com
+# test.com
+# etc.com
 haeniken.com,www.haeniken.com
 example.com
 test.haeniken.com
