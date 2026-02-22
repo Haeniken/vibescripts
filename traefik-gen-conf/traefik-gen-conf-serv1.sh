@@ -14,7 +14,7 @@ declare -A existing_domains
 # Functions
 show_help() {
     echo "Usage: $0 [options]"
-    echo "Generate Traefik configuration from CSV by github.com/haeniken. Tested on traefik:v3.3.3"
+    echo "Generate Traefik configuration from CSV by github.com/haeniken"
     echo "Options:"
     echo "  -v, --version  Show version"
     echo "  -h, --help     Show this help"
@@ -99,10 +99,12 @@ EOF
 
         [[ ${#valid_domains[@]} -eq 0 ]] && continue
 
-        # Build domain rule string
+        # Build domain rule string for Traefik 3
+        # Format: Host(`domain1.com`) || Host(`domain2.com`) || Host(`domain3.com`)
+        domain_rule=""
         for ((i = 0; i < ${#valid_domains[@]}; i++)); do
-            [[ $i -gt 0 ]] && domain_rule+=", "
-            domain_rule+="\"${valid_domains[$i]}\""
+            [[ $i -gt 0 ]] && domain_rule+=" || "
+            domain_rule+="Host(\`${valid_domains[$i]}\`)"
         done
 
         echo "Processing: $router_name (domains: ${valid_domains[*]})"
@@ -113,7 +115,7 @@ EOF
       entryPoints:
         - https
       service: $SERVICE_NAME
-      rule: Host($domain_rule)
+      rule: $domain_rule
       middlewares:
         - changeHeaders
       tls:
